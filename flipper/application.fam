@@ -1,0 +1,3 @@
+App(appid="gitgotchi", name="Gitgotchi", apptype=FlipperAppType.EXTERNAL,
+    entry_point="gitgotchi_app", stack_size=4096,
+    requires=["gui", "cli"], fap_category="Games", fap_version="0.1")

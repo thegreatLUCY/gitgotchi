@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+companion/state.json
+companion/state.tmp
+flipper/.vscode/
+flipper/.ufbt/
+.venv/
+.DS_Store
+flipper/dist/
+/preview.png

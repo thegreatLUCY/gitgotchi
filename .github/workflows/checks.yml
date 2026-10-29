@@ -1,0 +1,27 @@
+name: Checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  companion:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ['3.11', '3.14']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Configure test Git identity
+        run: |
+          git config --global user.name 'Gitgotchi Tests'
+          git config --global user.email 'tests@example.invalid'
+          git config --global commit.gpgsign false
+      - run: python -m unittest discover -s tests -v
+      - run: python -m py_compile companion/app.py tools/capture_flipper.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check preview JavaScript syntax
+        run: node -e "const fs=require('fs');const html=fs.readFileSync('companion/index.html','utf8');new Function(html.match(/<script>([\s\S]*)<\/script>/)[1]);"
