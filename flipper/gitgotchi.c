@@ -34,7 +34,8 @@ typedef struct {
   FuriMutex *mutex;
   FuriMessageQueue *inputs;
   int x, target;
-  uint32_t frame, until, bond, meals, rng, commit_until, tick_rate;
+  uint32_t frame, until, bond, meals, rng, commit_until, tick_rate,
+      feast_started;
   Mood mood;
   bool local_food;
   bool grid_open, goal_party;
@@ -55,7 +56,10 @@ static void heart(Canvas *c, int x, int y) {
   canvas_draw_dot(c, x + 2, y + 4);
 }
 static void action(Pip *p, Mood m) {
-  if(m==CommitNotice || m==PushNotice)p->grid_open=false;
+  if (m == CommitNotice || m == PushNotice)
+    p->grid_open = false;
+  if (m != Celebrate)
+    p->feast_started = 0;
   p->mood = m;
   p->until = p->frame + (m == Sleep ? 36000 : m == Eat ? 100 : 50);
   if (m == Eat) {
@@ -73,7 +77,7 @@ static void action(Pip *p, Mood m) {
       p->until = p->commit_until + 20;
   } else if (m == Celebrate) {
     p->target = p->x;
-    p->until = p->frame + 30;
+    p->until = p->frame + 40;
   } else if (m == Sleep)
     p->target = 23;
   else if (m == Pet) {
@@ -81,6 +85,94 @@ static void action(Pip *p, Mood m) {
     p->bond++;
   } else if (m == Play)
     p->target = 77;
+}
+// The meal gets its own close-up so individual bites read on a filmed LCD.
+static void draw_feast(Canvas *c, Pip *p) {
+  bool happy = p->mood == Celebrate;
+  uint32_t elapsed = p->frame - p->feast_started;
+  uint32_t bite = elapsed / 24;
+  if (bite > 2)
+    bite = 2;
+  int bob = (p->frame / 3) % 2;
+  canvas_draw_box(c, 0, 0, 128, 12);
+  canvas_set_color(c, ColorWhite);
+  canvas_draw_str_aligned(
+      c, 64, 9, AlignCenter, AlignBottom,
+      happy ? (p->goal_party ? "DAILY GOAL DONE!" : "HAPPY & FED!")
+            : "NOM NOM NOM!");
+  canvas_set_color(c, ColorBlack);
+  // Large ears, rounded cheeks, white face and a noticeably full belly.
+  canvas_draw_rbox(c, 20, 24 + bob, 46, 31, 9);
+  for (int i = 0; i < 13; i++) {
+    canvas_draw_box(c, 22, 13 + i + bob, 1 + i, 1);
+    canvas_draw_box(c, 63 - i, 13 + i + bob, 1 + i, 1);
+  }
+  canvas_set_color(c, ColorWhite);
+  canvas_draw_line(c, 25, 20 + bob, 27, 26 + bob);
+  canvas_draw_line(c, 60, 20 + bob, 58, 26 + bob);
+  canvas_draw_rbox(c, 27, 29 + bob, 32, 19, 6);
+  canvas_draw_rbox(c, 30, 49 + bob, happy ? 29 : 25, 11, happy ? 5 : 4);
+  canvas_set_color(c, ColorBlack);
+  // Eyes squeeze shut with every chomp.
+  for (int x = 32; x <= 49; x += 17) {
+    canvas_draw_line(c, x, 35 + bob, x + 3, 33 + bob);
+    canvas_draw_line(c, x + 3, 33 + bob, x + 6, 35 + bob);
+  }
+  canvas_draw_box(c, 41, 38 + bob, 5, 2);
+  if (!happy && p->frame % 6 < 3) {
+    canvas_draw_rbox(c, 39, 42 + bob, 9, 5, 2);
+    canvas_set_color(c, ColorWhite);
+    canvas_draw_line(c, 41, 43 + bob, 45, 43 + bob);
+    canvas_set_color(c, ColorBlack);
+  } else {
+    canvas_draw_line(c, 38, 43 + bob, 43, 46 + bob);
+    canvas_draw_line(c, 43, 46 + bob, 48, 43 + bob);
+  }
+  canvas_draw_box(c, 26, 57, 8, 3);
+  canvas_draw_box(c, 56, 57, 8, 3);
+  if (!happy) {
+    int approach = (p->frame % 24 > 13) ? 7 : 0;
+    int snack_x = 96 - approach;
+    canvas_draw_line(c, 64, 49, snack_x - 9, 43);
+    canvas_draw_line(c, 64, 50, snack_x - 9, 44);
+    canvas_draw_disc(c, snack_x, 35, 12);
+    canvas_set_color(c, ColorWhite);
+    canvas_draw_disc(c, snack_x, 35, 10);
+    canvas_set_color(c, ColorBlack);
+    canvas_draw_box(c, snack_x - 4, 30, 2, 2);
+    canvas_draw_box(c, snack_x + 3, 34, 2, 2);
+    canvas_draw_box(c, snack_x - 2, 39, 2, 2);
+    // Increasing bite-shaped cutouts, rather than a vanishing food dot.
+    canvas_set_color(c, ColorWhite);
+    if (bite >= 1)
+      canvas_draw_disc(c, snack_x - 8, 28, 6);
+    if (bite >= 2)
+      canvas_draw_disc(c, snack_x - 8, 38, 7);
+    canvas_set_color(c, ColorBlack);
+    canvas_draw_box(c, 70 + (p->frame % 4), 43 + (p->frame % 3), 2, 2);
+    canvas_draw_dot(c, 80, 48 + (p->frame % 3));
+    char text[16];
+    snprintf(text, sizeof(text), "BITE %lu/3", (unsigned long)bite + 1);
+    canvas_draw_str(c, 78, 60, text);
+    // Three small bite indicators make the progression visible.
+    for (uint32_t i = 0; i < 3; i++) {
+      canvas_draw_frame(c, 84 + i * 9, 49, 6, 5);
+      if (i <= bite)
+        canvas_draw_box(c, 86 + i * 9, 51, 2, 1);
+    }
+  } else {
+    heart(c, 77, 22 - (p->frame / 3) % 3);
+    heart(c, 109, 30 - (p->frame / 4) % 3);
+    canvas_draw_rframe(c, 77, 40, 41, 16, 4);
+    canvas_draw_str(c, 83, 51,
+                    (p->frame - p->until + 40) < 17 ? "burp!" : "thanks!");
+  }
+}
+// Match this device's LCD polarity: light background, dark artwork.
+static void finish_frame(Canvas *c) {
+  canvas_set_color(c, ColorXOR);
+  canvas_draw_box(c, 0, 0, 128, 64);
+  canvas_set_color(c, ColorBlack);
 }
 static void draw(Canvas *c, void *ctx) {
   Pip *p = ctx;
@@ -106,6 +198,13 @@ static void draw(Canvas *c, void *ctx) {
     canvas_draw_str(c, 3, 61,
                     p->daily_done >= p->daily_goal ? "GOAL DONE!  Back: pet"
                                                    : "One cycle = one meal");
+    finish_frame(c);
+    furi_mutex_release(p->mutex);
+    return;
+  }
+  if (p->feast_started && (p->mood == Eat || p->mood == Celebrate)) {
+    draw_feast(c, p);
+    finish_frame(c);
     furi_mutex_release(p->mutex);
     return;
   }
@@ -125,16 +224,11 @@ static void draw(Canvas *c, void *ctx) {
     canvas_draw_str_aligned(c, 64, 9, AlignCenter, AlignBottom, banner);
     canvas_set_color(c, ColorBlack);
   } else {
-    canvas_draw_str(c, 3, 9, "Pip");
+    canvas_draw_str(c, 3, 9, "Gitgotchi");
     char progress[24];
     snprintf(progress, sizeof(progress), "%lu/%lu",
              (unsigned long)p->daily_done, (unsigned long)p->daily_goal);
-    canvas_draw_str(c, 38, 9, progress);
-    for (uint32_t i = 0; i < p->daily_goal && i < 6; i++) {
-      canvas_draw_frame(c, 75 + i * 8, 3, 6, 6);
-      if (i < p->daily_done)
-        canvas_draw_box(c, 77 + i * 8, 5, 2, 2);
-    }
+    canvas_draw_str_aligned(c, 125, 9, AlignRight, AlignBottom, progress);
   }
   // Window frame, moon, sill and little curtains.
   canvas_draw_rframe(c, 89, 16, 29, 20, 2);
@@ -242,8 +336,11 @@ static void draw(Canvas *c, void *ctx) {
   }
   if (p->mood == PushNotice) {
     int drop = (int)(p->frame % 20);
-    canvas_draw_frame(c, 103, 15 + drop, 7, 5);
-    canvas_draw_line(c, 106, 15 + drop, 106, 19 + drop);
+    canvas_draw_rbox(c, 100, 14 + drop, 13, 10, 2);
+    canvas_set_color(c, ColorWhite);
+    canvas_draw_line(c, 106, 15 + drop, 106, 22 + drop);
+    canvas_draw_line(c, 101, 18 + drop, 111, 18 + drop);
+    canvas_set_color(c, ColorBlack);
   }
   if (p->mood == Eat) {
     canvas_draw_box(c, 101, 47, 3, 2);
@@ -255,6 +352,7 @@ static void draw(Canvas *c, void *ctx) {
   }
   if (p->mood == Play && !moving)
     canvas_draw_circle(c, 86, 46 - (p->frame % 6), 3);
+  finish_frame(c);
   furi_mutex_release(p->mutex);
 }
 static void screen_commit(uint8_t *data, size_t size,
@@ -447,6 +545,10 @@ int32_t gitgotchi_app(void *arg) {
       p->x -= 2;
       if (p->x < p->target)
         p->x = p->target;
+    }
+    if (p->mood == Eat && p->x == p->target && !p->feast_started) {
+      p->feast_started = p->frame;
+      p->until = p->frame + 80;
     }
     if (p->mood == Idle && p->frame % 60 == 0)
       p->target = 30 + random_next(p) % 62;

@@ -196,11 +196,11 @@ def main():
         def log_message(self, *args):
             pass
     threading.Thread(target=watch, daemon=True).start()
-    print(f'Pip is awake: http://127.0.0.1:{args.port} — watching {watcher.repo}', flush=True)
+    print(f'Gitgotchi is awake: http://127.0.0.1:{args.port} — watching {watcher.repo}', flush=True)
     try:
         ThreadingHTTPServer(('127.0.0.1', args.port), Handler).serve_forever()
     except KeyboardInterrupt:
-        print('Pip companion stopped.', flush=True)
+        print('Gitgotchi companion stopped.', flush=True)
     finally:
         if device:
             device.close()

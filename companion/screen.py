@@ -8,7 +8,7 @@ def encode_png(bitmap, scale=6):
     for y in range(64):
         row = bytearray()
         for x in range(128):
-            dark = not ((bitmap[(y // 8) * 128 + x] >> (y % 8)) & 1)
+            dark = bool((bitmap[(y // 8) * 128 + x] >> (y % 8)) & 1)
             color = bytes((40, 61, 43) if dark else (198, 214, 160))
             row.extend(color * scale)
         pixels.extend((b'\0' + row) * scale)

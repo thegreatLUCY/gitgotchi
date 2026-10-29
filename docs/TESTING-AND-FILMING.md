@@ -1,10 +1,10 @@
-# Test Pip and film your first Git snack
+# Test Gitgotchi and film your first Git snack
 
-## What keeping Pip alive means today
+## What keeping Gitgotchi alive means today
 
-Pip cannot die. There is no health decay, hunger meter, illness, or evolution yet. The app is a living-animation and Git-reward prototype, not a complete Tamagotchi simulation. A day off never removes progress.
+Gitgotchi cannot die. There is no health decay, hunger meter, illness, or evolution yet. The app is a living-animation and Git-reward prototype, not a complete Tamagotchi simulation. A day off never removes progress.
 
-- Pet Pip with **OK**; it reacts and affection increases.
+- Pet Gitgotchi with **OK**; it reacts and affection increases.
 - Use **Down** to play, **Up** to sleep, **Left/Right** to walk and wake.
 - Keep the app open for animation. Unplugging USB does not stop the on-device behavior.
 - Make eligible Git progress for food. The companion needs to be running on your computer to deliver Git events.
@@ -24,7 +24,7 @@ On startup, the companion samples the device tick counter and calibrates animati
 
 Find your port using `python -m serial.tools.list_ports`. Add `--port 8766` if another preview occupies port 8765. Open the localhost URL the companion prints.
 
-Feeding uses one simple cycle: **commit + push = one meal and one grid square**. Playing and petting give no food or grid credit. Hold **Right** on Flipper to open today’s grid; Back returns to Pip. The browser shows the same daily progress.
+Feeding uses one simple cycle: **commit + push = one meal and one grid square**. Playing and petting give no food or grid credit. Hold **Right** on Flipper to open today’s grid; Back returns to Gitgotchi. The browser shows the same daily progress.
 
 ## Do one real end-to-end test
 
@@ -40,9 +40,9 @@ Your branch should track the intended remote branch. The companion never chooses
 Make a small useful change, such as adding a demo note:
 
 ```sh
-printf '\nTested Pip feeding after a successful Git push.\n' >> demo-notes.md
+printf '\nTested Gitgotchi feeding after a successful Git push.\n' >> demo-notes.md
 git add demo-notes.md
-git commit -m "Document Pip's Git snack demo"
+git commit -m "Document Gitgotchi's Git snack demo"
 ```
 
 Within about two seconds the device should show **COMMIT DETECTED**. Wait a few seconds so the camera catches it, then run:
@@ -55,14 +55,15 @@ Expected sequence:
 
 1. **COMMIT DETECTED** — at least roughly six seconds of notice if commit and push arrive close together.
 2. **PUSH CONFIRMED** — about two seconds, with a falling snack parcel.
-3. **SNACK DELIVERY!** — Pip walks to the bowl and eats.
-4. **THANK YOU!** — little happy hops and hearts, then ordinary life resumes.
+3. **SNACK DELIVERY!** — Gitgotchi walks to the bowl.
+4. **NOM NOM NOM!** — an eight-second close-up shows three bites, chewing, and crumbs.
+5. **HAPPY & FED!** — a fuller belly, hearts, and a burp/thanks bubble, then ordinary life resumes. At the daily minimum the finish says **DAILY GOAL DONE!**.
 
 The companion reports `USB confirmed: commit` and `USB confirmed: feed`. The feed acknowledgement increases the device's meal total before the eating scene finishes. The browser shows the pending push and daily reward count.
 
-"Push confirmed" means the local branch's configured upstream tracking ref contains the pending commit. A normal successful `git push` updates that ref. A failed push should not feed Pip. An external fetch can also establish upstream presence; this is not a network receipt checker or CI status check.
+"Push confirmed" means the local branch's configured upstream tracking ref contains the pending commit. A normal successful `git push` updates that ref. A failed push should not feed Gitgotchi. An external fetch can also establish upstream presence; this is not a network receipt checker or CI status check.
 
-The default daily goal is **three completed cycles per local day per repository**, adjustable with `--daily-goal 1` through `--daily-goal 12`. It is a minimum, not a cap: extra cycles still feed Pip. Reaching the goal triggers a special celebration. The grid resets when the running companion observes a new local date. Unpushed pending progress survives a companion restart. Old history, empty commits, and backward/divergent movement do not earn food. Multiple commits between polls may collapse into one reward.
+The default daily goal is **three completed cycles per local day per repository**, adjustable with `--daily-goal 1` through `--daily-goal 12`. It is a minimum, not a cap: extra cycles still feed Gitgotchi. Reaching the goal triggers a special celebration. The grid resets when the running companion observes a new local date. Unpushed pending progress survives a companion restart. Old history, empty commits, and backward/divergent movement do not earn food. Multiple commits between polls may collapse into one reward.
 
 ## Film it with your phone
 
@@ -72,7 +73,7 @@ Suggested 20–30 second shot:
 
 | Shot | What happens |
 | --- | --- |
-| Opening | Flipper is in frame, Pip wanders; the terminal shows your project. |
+| Opening | Flipper is in frame, Gitgotchi wanders; the terminal shows your project. |
 | Commit | Type the commit command and hold on **COMMIT DETECTED**. |
 | Push | Type `git push`; keep its successful output visible. |
 | Payoff | Move attention to the Flipper for the parcel, eating, and thank-you scene. |

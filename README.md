@@ -2,37 +2,48 @@
 
 **A tiny pet that lives on your Flipper Zero, notices your commits, and gets a snack when you push your work.**
 
-→ **[How to test Pip, care for it, and film a commit → push → snack demo](docs/TESTING-AND-FILMING.md)**
+→ **[How to test Gitgotchi, care for it, and film a commit → push → snack demo](docs/TESTING-AND-FILMING.md)**
 
-Meet **Pip**: a curious pixel creature with a bed, a ball, a food bowl, and a small window onto the world. Pip wanders, blinks, breathes, naps, eats, and enjoys a little affection while you work.
+Meet **Gitgotchi**: a curious pixel creature with a bed, a ball, a food bowl, and a small window onto the world. Gitgotchi wanders, blinks, breathes, naps, eats, and enjoys a little affection while you work.
 
 Gitgotchi is an early, working prototype with a native Flipper app, a Python Git companion, and an interactive browser preview. No ESP32, cloud service, GitHub token, or AI model is needed to run it.
 
-## See Pip
+## See Gitgotchi
+
+![Gitgotchi on its light LCD background](docs/screenshots/gitgotchi-display.png)
 
 These are **real framebuffer captures from a physical Flipper Zero**, enlarged 6× with a green LCD palette. They are screen captures, not photographs of the device.
 
 | Awake and exploring | Getting a little affection | Having a nap |
 | --- | --- | --- |
-| ![Pip awake on Flipper](docs/screenshots/flipper-awake.png) | ![Pip being petted on Flipper](docs/screenshots/flipper-petting.png) | ![Pip sleeping on Flipper](docs/screenshots/flipper-sleeping.png) |
+| ![Gitgotchi awake on Flipper](docs/screenshots/flipper-awake.png) | ![Gitgotchi being petted on Flipper](docs/screenshots/flipper-petting.png) | ![Gitgotchi sleeping on Flipper](docs/screenshots/flipper-sleeping.png) |
 
 The companion also includes a separate, interactive Mac/browser prototype:
 
-<img src="docs/screenshots/mac-preview.png" alt="Gitgotchi browser preview with Pip's room, interaction buttons, and Git activity" width="600">
+<img src="docs/screenshots/mac-preview.png" alt="Gitgotchi browser preview with Gitgotchi's room, interaction buttons, and Git activity" width="600">
 
 The browser pet and Flipper pet have separate saves. When USB is connected, a second panel streams the **actual Flipper screen** above the interactive preview. That panel is a live mirror; the interactive preview below it is a separate pet.
+
+## A meal worth filming
+
+The real device now cuts to a larger, eight-second feeding scene: three visible bites, moving food, crumbs, chewing, and a happy full-belly finish. These are on-device captures from an explicit animation test, not new Git credit.
+
+| First bite | Last bite | Happy finish |
+| --- | --- | --- |
+| ![First bite](docs/screenshots/feeding-bite-1.png) | ![Last bite](docs/screenshots/feeding-bite-3.png) | ![Happy and fed](docs/screenshots/feeding-happy.png) |
 
 ## Daily commit-and-push grid
 
 ![Daily commit-and-push goal on Flipper](docs/screenshots/daily-grid.png)
 
-Hold **Right** on Flipper to open the grid. Each completed cycle fills a square and feeds Pip. The default goal is **3 per day**; use `--daily-goal 5` for a different minimum. Extra cycles still earn food. **Playing never fills a square or feeds Pip.**
+Hold **Right** on Flipper to open the grid. Each completed cycle fills a square and feeds Gitgotchi. The default goal is **3 per day**; use `--daily-goal 5` for a different minimum. Extra cycles still earn food. **Playing never fills a square or feeds Gitgotchi.**
 
 ## What works today
 
 - Native 128 × 64 Flipper habitat with procedural pixel artwork.
-- Breathing, blinking, wandering, petting hearts, eating, sleeping, and simple play animations.
-- Physical button interactions, including waking Pip by moving left or right.
+- Breathing, blinking, wandering, petting hearts, sleeping, and simple play animations.
+- Close-up feeding: a large snack, three visible bites, chewing and crumbs, then a full belly, hearts, and a burp bubble.
+- Physical button interactions, including waking Gitgotchi by moving left or right.
 - Affection and lifetime meal totals saved to the Flipper SD card on normal app exit.
 - Local Git polling with one snack per eligible observed change and an adjustable daily goal per repository.
 - Automatic device animation-clock calibration on companion startup.
@@ -40,7 +51,7 @@ Hold **Right** on Flipper to open the grid. Each completed cycle fills a square 
 - A localhost browser preview with demo controls, optional sound, activity history, and local persistence.
 - A utility for capturing actual Flipper framebuffer screenshots.
 
-Pip never dies, and taking a break does not erase your progress. The pet keeps animating on-device while unplugged, as long as the app is open. Closing the app pauses the pet; it does not run as a background firmware service.
+Gitgotchi never dies, and taking a break does not erase your progress. The pet keeps animating on-device while unplugged, as long as the app is open. Closing the app pauses the pet; it does not run as a background firmware service.
 
 ## Quick start: try the browser pet
 
@@ -68,14 +79,14 @@ For an offline animation-only preview, open [`companion/index.html`](companion/i
 
 | Control | Action |
 | --- | --- |
-| Pet Pip / Space | Affection and a little heart |
+| Pet Gitgotchi / Space | Affection and a little heart |
 | Up / Take a nap | Walk to bed and sleep |
 | Down / Play together | Play with the ball |
 | Left / Right | Wander across the room and wake up |
 | Wake gently | Return to the middle of the habitat |
 | Sound off/on | Toggle browser-only sound |
 
-## Install Pip on Flipper Zero
+## Install Gitgotchi on Flipper Zero
 
 You need a Flipper Zero with an SD card and a USB **data** cable. No extra board is required.
 
@@ -86,7 +97,7 @@ You need a Flipper Zero with an SD card and a USB **data** cable. No extra board
 | [`gitgotchi-xfw0053-api54.fap`](firmware/gitgotchi-xfw0053-api54.fap) | Xtreme XFW-0053 / 54.0 | Installed and tested on a physical device |
 | [`gitgotchi-official151-api88.fap`](firmware/gitgotchi-official151-api88.fap) | Official 1.5.1 / 88.2 | Compiled and checked by uFBT; not hardware-tested |
 
-These are application files, not firmware updates. Match your installed firmware's API. If Flipper reports an API mismatch, rebuild with the appropriate SDK rather than installing different firmware just to run Pip.
+These are application files, not firmware updates. Match your installed firmware's API. If Flipper reports an API mismatch, rebuild with the appropriate SDK rather than installing different firmware just to run Gitgotchi.
 
 1. Connect to **qFlipper** and open its file manager.
 2. Copy the matching `.fap` into **SD Card → apps → Games**. You can name the file `gitgotchi.fap`.
@@ -97,7 +108,7 @@ These are application files, not firmware updates. Match your installed firmware
 
 | Button | Action |
 | --- | --- |
-| OK | Pet Pip |
+| OK | Pet Gitgotchi |
 | Up | Walk to bed and sleep |
 | Down | Play |
 | Left / Right | Walk and wake up |
@@ -130,7 +141,7 @@ python companion/app.py \
   --serial /dev/cu.usbmodemYOUR_FLIPPER
 ```
 
-Keep Gitgotchi open on the device. The terminal should print `USB confirmed: status`, followed by the local preview address. Commit a file change: the companion prints `USB confirmed: commit`, and Pip shows **COMMIT DETECTED**. Push the commit to your configured upstream: the companion prints `USB confirmed: feed`, and Pip shows **PUSH CONFIRMED → SNACK DELIVERY! → THANK YOU!**. The commit notice has a minimum hold so a quick push does not hide it.
+Keep Gitgotchi open on the device. The terminal should print `USB confirmed: status`, followed by the local preview address. Commit a file change: the companion prints `USB confirmed: commit`, and Gitgotchi shows **COMMIT DETECTED**. Push the commit to your configured upstream: the companion prints `USB confirmed: feed`, and Gitgotchi shows **PUSH CONFIRMED → SNACK DELIVERY! → THANK YOU!**. The commit notice has a minimum hold so a quick push does not hide it.
 
 If port 8765 is occupied, add `--port 8766`. Keep one companion process per state file and serial device. Use `--state /path/to/pip-state.json` for an independent watcher session.
 
@@ -146,19 +157,19 @@ The watcher polls HEAD every two seconds:
 4. It sends one snack and fills one square for that completed commit-and-push cycle.
 5. It clears the pending reward so the same push cannot feed twice, including after a restart.
 
-A successful ordinary `git push` normally updates the local upstream tracking ref. This is a local observation, not a remote API receipt check: an external fetch can also establish upstream presence. With no upstream configured, push mode waits. A failed push does not update that ref and should not feed Pip.
+A successful ordinary `git push` normally updates the local upstream tracking ref. This is a local observation, not a remote API receipt check: an external fetch can also establish upstream presence. With no upstream configured, push mode waits. A failed push does not update that ref and should not feed Gitgotchi.
 
 The workflow is always **commit + push = one meal + one square**. Several commits in one observed batch count as one cycle; the grid measures completed cycles, not individual commits in a batch.
 
 Several commits between polls count as one pending reward. Empty commits, backward resets, and divergent history movement do not earn food. A checkout to a descendant commit can count. This is an activity heuristic, not a code quality measure or anti-cheat system.
 
-The daily minimum is **three cycles**, adjustable with `--daily-goal 1` through `--daily-goal 12`. This is a goal, not a food cap: extra cycles still feed Pip. Reaching the goal produces a special celebration. The browser grid resets at local midnight while the companion is running. The device mirrors the last synchronized date/count, so reconnect the companion to refresh it after a day offline.
+The daily minimum is **three cycles**, adjustable with `--daily-goal 1` through `--daily-goal 12`. This is a goal, not a food cap: extra cycles still feed Gitgotchi. Reaching the goal produces a special celebration. The browser grid resets at local midnight while the companion is running. The device mirrors the last synchronized date/count, so reconnect the companion to refresh it after a day offline.
 
-Playing and petting never add food or grid credit. The preview has no manual snack button. Developer CLI feed commands remain for diagnostics; they do not add daily Git credit and are not the normal feeding flow. Pip has no hunger decay and cannot die in this prototype.
+Playing and petting never add food or grid credit. The preview has no manual snack button. Developer CLI feed commands remain for diagnostics; they do not add daily Git credit and are not the normal feeding flow. Gitgotchi has no hunger decay and cannot die in this prototype.
 
 | Commit noticed | Push confirmed | Snack delivery |
 | --- | --- | --- |
-| ![Commit detected](docs/screenshots/commit-detected.png) | ![Push confirmed](docs/screenshots/push-confirmed.png) | ![Pip eating](docs/screenshots/snack-delivery.png) |
+| ![Commit detected](docs/screenshots/commit-detected.png) | ![Push confirmed](docs/screenshots/push-confirmed.png) | ![Gitgotchi eating](docs/screenshots/snack-delivery.png) |
 
 These real device captures were taken during explicit CLI animation checks. The watcher tests separately exercise commit/push detection with a real temporary bare Git remote.
 
@@ -203,7 +214,7 @@ python tools/capture_flipper.py \
   --output pip-petting.png
 ```
 
-Optional actions: `pet`, `feed`, `sleep`, `wake`, and `commit`. `feed` changes the device's meal count. Use `--wait 4` to let Pip reach bed before a sleeping capture. Omit `--action` to capture the current screen without initiating an interaction.
+Optional actions: `pet`, `feed`, `sleep`, `wake`, and `commit`. `feed` changes the device's meal count. Use `--wait 4` to let Gitgotchi reach bed before a sleeping capture. Omit `--action` to capture the current screen without initiating an interaction.
 
 The utility decodes the app's 128 × 64 framebuffer and writes an enlarged PNG using the Python standard library; only the serial connection needs pyserial. The bundled decoder uses the polarity observed on the tested firmware; another firmware/display configuration may require changing the `dark` expression in `companion/screen.py`.
 
