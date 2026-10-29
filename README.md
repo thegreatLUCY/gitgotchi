@@ -1,6 +1,8 @@
 # Gitgotchi
 
-**A tiny pet that lives on your Flipper Zero and gets a snack when you make progress in Git.**
+**A tiny pet that lives on your Flipper Zero, notices your commits, and gets a snack when you push your work.**
+
+→ **[How to test Pip, care for it, and film a commit → push → snack demo](docs/TESTING-AND-FILMING.md)**
 
 Meet **Pip**: a curious pixel creature with a bed, a ball, a food bowl, and a small window onto the world. Pip wanders, blinks, breathes, naps, eats, and enjoys a little affection while you work.
 
@@ -18,7 +20,7 @@ The companion also includes a separate, interactive Mac/browser prototype:
 
 <img src="docs/screenshots/mac-preview.png" alt="Gitgotchi browser preview with Pip's room, interaction buttons, and Git activity" width="600">
 
-The browser pet and the Flipper pet have separate saves. The browser artwork and animation are richer; the browser is not a live mirror or remote control of the device.
+The browser pet and Flipper pet have separate saves. When USB is connected, a second panel streams the **actual Flipper screen** above the interactive preview. That panel is a live mirror; the interactive preview below it is a separate pet.
 
 ## What works today
 
@@ -27,6 +29,7 @@ The browser pet and the Flipper pet have separate saves. The browser artwork and
 - Physical button interactions, including waking Pip by moving left or right.
 - Affection and lifetime meal totals saved to the Flipper SD card on normal app exit.
 - Local Git polling with one snack per eligible observed change and a three-meal daily cap per repository.
+- Automatic device animation-clock calibration on companion startup.
 - USB CLI delivery with an acknowledgement containing the device's meal, affection, and mood values.
 - A localhost browser preview with demo controls, optional sound, activity history, and local persistence.
 - A utility for capturing actual Flipper framebuffer screenshots.
@@ -43,7 +46,7 @@ cd gitgotchi
 python3 companion/app.py --repo .
 ```
 
-Open **http://127.0.0.1:8765**. The initial Git history establishes a baseline. Make a new file-changing commit after the watcher starts to trigger a snack.
+Open **http://127.0.0.1:8765**. The initial Git history establishes a baseline. Make a new file-changing commit after the watcher starts, then push it to your configured upstream to trigger a snack. Use `--feed-on commit` for immediate local-only feeding.
 
 To watch a different project:
 
@@ -121,7 +124,7 @@ python companion/app.py \
   --serial /dev/cu.usbmodemYOUR_FLIPPER
 ```
 
-Keep Gitgotchi open on the device. The terminal should print `USB confirmed: status`, followed by the local preview address. Commit a file change; within a few seconds, the companion sends a snack and prints `USB confirmed: feed`.
+Keep Gitgotchi open on the device. The terminal should print `USB confirmed: status`, followed by the local preview address. Commit a file change: the companion prints `USB confirmed: commit`, and Pip shows **COMMIT DETECTED**. Push the commit to your configured upstream: the companion prints `USB confirmed: feed`, and Pip shows **PUSH CONFIRMED → SNACK DELIVERY! → THANK YOU!**. The commit notice has a minimum hold so a quick push does not hide it.
 
 If port 8765 is occupied, add `--port 8766`. Keep one companion process per state file and serial device. Use `--state /path/to/pip-state.json` for an independent watcher session.
 
@@ -131,15 +134,25 @@ Gitgotchi watches the **local checkout**. It does not need a GitHub account conn
 
 The watcher polls HEAD every two seconds:
 
-1. The first observed commit becomes the baseline; existing history earns no food.
-2. A new HEAD must descend from the previous HEAD.
-3. The two commits must have a net file difference.
-4. An eligible observation awards one meal, up to three per repository per local calendar day.
-5. The watcher records the new HEAD so restarts do not feed the same commit again.
+1. First observation establishes a baseline; existing history earns no food.
+2. A descendant HEAD with a net file change produces **COMMIT DETECTED** and a persistent pending reward.
+3. In the default `--feed-on push` mode, the companion waits until the current branch's configured upstream tracking ref contains that pending commit.
+4. It sends one snack, capped at three rewards per repository per local calendar day.
+5. It clears the pending reward so the same push cannot feed twice, including after a restart.
 
-Several commits between polls count as one meal. Empty commits, backward resets, and divergent history movement do not earn food. A checkout to a descendant commit can count. This is a simple activity heuristic, not a measure of code quality. Rewriting history can bypass its intent; it is a personal motivator, not an anti-cheat system.
+A successful ordinary `git push` normally updates the local upstream tracking ref. This is a local observation, not a remote API receipt check: an external fetch can also establish upstream presence. With no upstream configured, push mode waits. A failed push does not update that ref and should not feed Pip.
 
-The daily cap belongs to the companion. Manually sending the `feed` command bypasses it. The Flipper stores a separate lifetime meal total.
+`--feed-on commit` rewards immediately and shows **COMMIT REWARDED** rather than claiming a push happened. This works offline without a remote.
+
+Several commits between polls count as one pending reward. Empty commits, backward resets, and divergent history movement do not earn food. A checkout to a descendant commit can count. This is an activity heuristic, not a code quality measure or anti-cheat system. Commit notices still appear after the daily food cap is reached.
+
+The cap belongs to the companion. Manually sending `feed` or `feedlocal` bypasses it. The Flipper stores a separate lifetime meal total. Pip has no hunger decay and cannot die in this prototype.
+
+| Commit noticed | Push confirmed | Snack delivery |
+| --- | --- | --- |
+| ![Commit detected](docs/screenshots/commit-detected.png) | ![Push confirmed](docs/screenshots/push-confirmed.png) | ![Pip eating](docs/screenshots/snack-delivery.png) |
+
+These real device captures were taken during explicit CLI animation checks. The watcher tests separately exercise commit/push detection with a real temporary bare Git remote.
 
 ## Architecture
 
@@ -158,16 +171,16 @@ Native Flipper app
         └── SD card save on exit
 ```
 
-The companion reads Git metadata and net file changes; it never commits, pushes, edits tracked files, or runs project code. It writes its own state file. The HTTP server binds only to `127.0.0.1` and serves the preview and a small state endpoint.
+The companion reads Git metadata and net file changes; it never commits, pushes, edits tracked files, or runs project code. It writes its own state file. The HTTP server binds only to `127.0.0.1` and serves the preview, a state endpoint, and `/api/screen.png` for the actual connected device screen. Serial commands and screen captures share one lock so they cannot interleave.
 
 ### State and protocol
 
 - Watcher: `companion/state.json` by default, containing repository paths, HEAD baselines, daily reward counts, and up to 30 event labels/commit IDs. This file is ignored by Git.
 - Browser: `localStorage`, under `pip-v1`, containing affection, demo meal count, and position.
 - Flipper: `/ext/apps_data/gitgotchi/pip.dat`, containing a format marker, affection, and lifetime meal count.
-- CLI: `gitgotchi status`, `feed`, `pet`, `sleep`, `wake`, and `screenshot`, available while the app is open.
+- CLI: `gitgotchi status`, `commit`, `feed`, `feedlocal`, `pet`, `sleep`, `wake`, and `screenshot`, available while the app is open.
 - Status response: `PIP meals=1 bond=2 mood=0`.
-- Mood values: idle `0`, walk `1`, pet `2`, eat `3`, sleep `4`, play `5`.
+- Mood values: idle `0`, walk `1`, pet `2`, eat `3`, sleep `4`, play `5`, commit notice `6`, push notice `7`, and celebration `8`.
 
 The device connection indicator reflects the last acknowledged command; it is not a continuous heartbeat. A recorded Git reward can be missed by an offline device: there is no persistent USB retry queue or automatic reconnection yet.
 
@@ -182,9 +195,9 @@ python tools/capture_flipper.py \
   --output pip-petting.png
 ```
 
-Optional actions: `pet`, `feed`, `sleep`, and `wake`. `feed` changes the device's meal count. Use `--wait 4` to let Pip reach bed before a sleeping capture. Omit `--action` to capture the current screen without initiating an interaction.
+Optional actions: `pet`, `feed`, `sleep`, `wake`, and `commit`. `feed` changes the device's meal count. Use `--wait 4` to let Pip reach bed before a sleeping capture. Omit `--action` to capture the current screen without initiating an interaction.
 
-The utility decodes the app's 128 × 64 framebuffer and writes an enlarged PNG using the Python standard library; only the serial connection needs pyserial. The bundled decoder uses the polarity observed on the tested firmware; another firmware/display configuration may require changing the `dark` expression in `write_png`.
+The utility decodes the app's 128 × 64 framebuffer and writes an enlarged PNG using the Python standard library; only the serial connection needs pyserial. The bundled decoder uses the polarity observed on the tested firmware; another firmware/display configuration may require changing the `dark` expression in `companion/screen.py`.
 
 ## Build from source
 
@@ -216,7 +229,7 @@ python3 -m unittest discover -s tests -v
 python3 -m py_compile companion/app.py tools/capture_flipper.py
 ```
 
-The watcher tests cover first-run baselines, repeated polling, restart deduplication, the daily cap, backward resets, and empty commits. The GitHub Actions workflow runs those tests and checks the inline JavaScript syntax.
+The watcher tests cover first-run baselines, repeated polling, restart deduplication, the daily cap, backward resets, empty commits, pending-reward restart persistence, waiting for upstream confirmation, and deduplication after a real local push. The GitHub Actions workflow runs those tests and checks the inline JavaScript syntax.
 
 Verified during development:
 

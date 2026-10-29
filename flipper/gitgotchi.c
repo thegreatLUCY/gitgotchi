@@ -19,13 +19,24 @@
 #include <string.h>
 
 #define SAVE_PATH EXT_PATH("apps_data/gitgotchi/pip.dat")
-typedef enum { Idle, Walk, Pet, Eat, Sleep, Play } Mood;
+typedef enum {
+  Idle,
+  Walk,
+  Pet,
+  Eat,
+  Sleep,
+  Play,
+  CommitNotice,
+  PushNotice,
+  Celebrate
+} Mood;
 typedef struct {
   FuriMutex *mutex;
   FuriMessageQueue *inputs;
   int x, target;
-  uint32_t frame, until, bond, meals, rng;
+  uint32_t frame, until, bond, meals, rng, commit_until, tick_rate;
   Mood mood;
+  bool local_food;
   uint8_t screen[1024];
 } Pip;
 typedef struct {
@@ -46,7 +57,20 @@ static void action(Pip *p, Mood m) {
   p->until = p->frame + (m == Sleep ? 36000 : m == Eat ? 100 : 50);
   if (m == Eat) {
     p->target = 101;
+
+  } else if (m == CommitNotice) {
+    p->target = p->x;
+    p->until = p->frame + 60;
+    p->commit_until = p->until;
+  } else if (m == PushNotice) {
+    p->target = p->x;
     p->meals++;
+    p->until = p->frame + 20;
+    if (p->until < p->commit_until + 20)
+      p->until = p->commit_until + 20;
+  } else if (m == Celebrate) {
+    p->target = p->x;
+    p->until = p->frame + 30;
   } else if (m == Sleep)
     p->target = 23;
   else if (m == Pet) {
@@ -60,57 +84,145 @@ static void draw(Canvas *c, void *ctx) {
   furi_mutex_acquire(p->mutex, FuriWaitForever);
   canvas_clear(c);
   canvas_set_font(c, FontSecondary);
-  canvas_draw_str(c, 2, 8, "Pip");
-  if (p->bond)
-    heart(c, 119, 2);
-  canvas_draw_line(c, 0, 54, 127, 54);
-  for (int i = 3; i < 128; i += 13)
-    canvas_draw_line(c, i, 58, i + 2, 58);
-  canvas_draw_frame(c, 92, 10, 22, 17);
-  canvas_draw_line(c, 103, 10, 103, 26);
-  canvas_draw_line(c, 92, 18, 113, 18);
-  canvas_draw_box(c, 107, 12, 3, 3);
-  canvas_draw_line(c, 8, 50, 32, 50);
-  canvas_draw_line(c, 8, 47, 8, 54);
-  canvas_draw_line(c, 32, 49, 32, 54);
-  canvas_draw_frame(c, 11, 46, 8, 4);
-  canvas_draw_circle(c, 77, 51, 3);
-  canvas_draw_line(c, 96, 51, 109, 51);
-  canvas_draw_line(c, 96, 51, 98, 54);
-  canvas_draw_line(c, 109, 51, 107, 54);
+  const char *banner = NULL;
+  if (p->mood == CommitNotice ||
+      (p->mood == PushNotice && p->frame < p->commit_until))
+    banner = "COMMIT DETECTED";
+  else if (p->mood == PushNotice)
+    banner = p->local_food ? "COMMIT REWARDED" : "PUSH CONFIRMED";
+  else if (p->mood == Eat)
+    banner = "SNACK DELIVERY!";
+  else if (p->mood == Celebrate)
+    banner = "THANK YOU!";
+  if (banner) {
+    canvas_draw_box(c, 0, 0, 128, 12);
+    canvas_set_color(c, ColorWhite);
+    canvas_draw_str_aligned(c, 64, 9, AlignCenter, AlignBottom, banner);
+    canvas_set_color(c, ColorBlack);
+  } else {
+    canvas_draw_str(c, 3, 9, "Pip");
+    if (p->bond)
+      heart(c, 118, 3);
+  }
+  // Window frame, moon, sill and little curtains.
+  canvas_draw_rframe(c, 89, 16, 29, 20, 2);
+  canvas_draw_frame(c, 92, 18, 23, 15);
+  canvas_draw_line(c, 103, 18, 103, 32);
+  canvas_draw_line(c, 92, 25, 114, 25);
+  canvas_draw_disc(c, 110, 21, 2);
+  canvas_set_color(c, ColorWhite);
+  canvas_draw_disc(c, 111, 20, 2);
+  canvas_set_color(c, ColorBlack);
+  canvas_draw_line(c, 87, 36, 120, 36);
+  for (int i = 0; i < 3; i++)
+    canvas_draw_line(c, 89 + i * 2, 16, 89 + i * 2, 29 - i * 2);
+  // A leafy plant and a cushioned bed.
+  canvas_draw_line(c, 6, 35, 6, 44);
+  canvas_draw_line(c, 6, 39, 2, 36);
+  canvas_draw_line(c, 6, 37, 10, 33);
+  canvas_draw_box(c, 1, 33, 3, 3);
+  canvas_draw_box(c, 9, 30, 3, 4);
+  canvas_draw_frame(c, 2, 43, 9, 7);
+  canvas_draw_line(c, 3, 50, 9, 50);
+  canvas_draw_rframe(c, 13, 46, 25, 7, 2);
+  canvas_draw_rframe(c, 15, 43, 10, 5, 2);
+  canvas_draw_line(c, 13, 52, 13, 55);
+  canvas_draw_line(c, 37, 52, 37, 55);
+  canvas_draw_line(c, 14, 49, 36, 49);
+  // Wooden floor and patterned rug.
+  canvas_draw_line(c, 0, 55, 127, 55);
+  canvas_draw_line(c, 0, 62, 127, 62);
+  for (int i = 8; i < 128; i += 26)
+    canvas_draw_line(c, i, 56, i, 61);
+  canvas_draw_line(c, 44, 59, 85, 59);
+  canvas_draw_line(c, 47, 60, 82, 60);
+  canvas_draw_circle(c, 76, 52, 3);
+  canvas_draw_line(c, 75, 50, 77, 53);
+  canvas_draw_rframe(c, 99, 49, 16, 5, 2);
+  canvas_draw_line(c, 101, 54, 113, 54);
+  heart(c, 105, 49);
   bool moving = p->x != p->target;
   bool asleep = p->mood == Sleep && !moving;
-  int x = p->x, y = asleep ? 49 : 46 + ((p->frame / (moving ? 2 : 10)) % 2),
-      h = asleep ? 9 : 14;
-  canvas_draw_box(c, x - 8, y - h + 2, 17, h - 2);
-  canvas_draw_box(c, x - 6, y - h, 13, 3);
-  canvas_draw_box(c, x - 7, y - h - 5, 4, 7);
-  canvas_draw_box(c, x + 4, y - h - 4, 4, 6);
-  canvas_draw_box(c, x - 10, y - 5, 3, 4);
-  canvas_draw_box(c, x - 6, y, 4, 2);
-  canvas_draw_box(c, x + 4, y, 4, 2);
-  canvas_set_color(c, ColorWhite);
-  canvas_draw_box(c, x - 5, y - h + 5, 11, h - 7);
-  canvas_set_color(c, ColorBlack);
-  if (asleep || p->frame % 43 < 2) {
-    canvas_draw_line(c, x - 4, y - h + 5, x - 2, y - h + 5);
-    canvas_draw_line(c, x + 3, y - h + 5, x + 5, y - h + 5);
+  bool chewing = p->mood == Eat && !moving;
+  int x = p->x, y = 52 - ((p->frame / (moving ? 2 : 12)) % 2);
+  if (p->mood == Celebrate)
+    y -= (p->frame % 8 < 4 ? 4 : 0);
+  if (asleep) {
+    // Curled body, folded ears and a tail tucked around the paws.
+    canvas_draw_rbox(c, x - 10, 40, 22, 11, 4);
+    canvas_set_color(c, ColorWhite);
+    canvas_draw_rbox(c, x - 7, 42, 16, 7, 3);
+    canvas_set_color(c, ColorBlack);
+    for (int i = 0; i < 6; i++)
+      canvas_draw_box(c, x - 6 - i / 2, 37 + i, 1 + i, 1);
+    canvas_draw_line(c, x - 4, 44, x - 1, 44);
+    canvas_draw_line(c, x + 3, 44, x + 6, 44);
+    canvas_draw_line(c, x + 1, 47, x + 3, 47);
+    canvas_draw_str(c, x + 15, 33 - (p->frame / 5) % 3, "z");
   } else {
-    canvas_draw_box(c, x - 3, y - h + 4, 2, 3);
-    canvas_draw_box(c, x + 4, y - h + 4, 2, 3);
+    // Rounded fox body, swept tail, pointed ears, light face and belly.
+    canvas_draw_line(c, x - 11, y - 5, x - 16, y - 9 + (p->frame / 4) % 2);
+    canvas_draw_line(c, x - 12, y - 4, x - 17, y - 8 + (p->frame / 4) % 2);
+    canvas_draw_rbox(c, x - 10, y - 21, 22, 20, 5);
+    for (int i = 0; i < 9; i++)
+      canvas_draw_box(c, x - 9, y - 28 + i, 1 + i, 1);
+    for (int i = 0; i < 9; i++)
+      canvas_draw_box(c, x + 11 - i, y - 28 + i, 1 + i, 1);
+    canvas_set_color(c, ColorWhite);
+    canvas_draw_line(c, x - 7, y - 23, x - 6, y - 20);
+    canvas_draw_line(c, x + 8, y - 23, x + 7, y - 20);
+    canvas_draw_rbox(c, x - 7, y - 18, 16, 10, 3);
+    canvas_draw_rbox(c, x - 5, y - 7, 11, 5, 2);
+    canvas_set_color(c, ColorBlack);
+    bool blink = p->frame % 47 < 2;
+    if (blink || p->mood == Pet || p->mood == Celebrate) {
+      canvas_draw_line(c, x - 5, y - 14, x - 3, y - 15);
+      canvas_draw_line(c, x - 3, y - 15, x - 1, y - 14);
+      canvas_draw_line(c, x + 3, y - 14, x + 5, y - 15);
+      canvas_draw_line(c, x + 5, y - 15, x + 7, y - 14);
+    } else {
+      canvas_draw_box(c, x - 4, y - 16, 2, 3);
+      canvas_draw_box(c, x + 4, y - 16, 2, 3);
+      canvas_set_color(c, ColorWhite);
+      canvas_draw_dot(c, x - 4, y - 16);
+      canvas_draw_dot(c, x + 4, y - 16);
+      canvas_set_color(c, ColorBlack);
+    }
+    canvas_draw_line(c, x, y - 12, x + 2, y - 12);
+    canvas_draw_dot(c, x + 1, y - 11);
+    if (chewing)
+      canvas_draw_frame(c, x, y - 10, 3, (p->frame % 4 < 2) ? 2 : 1);
+    else {
+      canvas_draw_line(c, x - 1, y - 10, x + 1, y - 9);
+      canvas_draw_line(c, x + 1, y - 9, x + 3, y - 10);
+    }
+    int stride = moving ? (p->frame % 4 < 2 ? 1 : -1) : 0;
+    canvas_draw_box(c, x - 7, y - 2 + stride, 5, 2);
+    canvas_draw_box(c, x + 4, y - 2 - stride, 5, 2);
+    if (p->mood == Pet || p->mood == Celebrate) {
+      heart(c, x + 15, y - 24 - (p->frame / 3) % 3);
+      heart(c, x - 16, y - 30 + (p->frame / 4) % 2);
+    }
+    if (p->mood == CommitNotice) {
+      canvas_draw_line(c, x + 15, y - 26, x + 15, y - 22);
+      canvas_draw_dot(c, x + 15, y - 20);
+    }
   }
-  canvas_draw_line(c, x + 1, y - h + 8, x + 2, y - h + 8);
-  if (p->mood == Pet)
-    heart(c, x + 10, y - h - 8);
-  if (asleep)
-    canvas_draw_str(c, x + 12, 27, "z");
+  if (p->mood == PushNotice) {
+    int drop = (int)(p->frame % 20);
+    canvas_draw_frame(c, 103, 15 + drop, 7, 5);
+    canvas_draw_line(c, 106, 15 + drop, 106, 19 + drop);
+  }
   if (p->mood == Eat) {
-    canvas_draw_box(c, 100, 48, 3, 2);
-    if (!moving && p->frame % 4 < 2)
-      canvas_draw_box(c, x + 9, y - 5, 3, 2);
+    canvas_draw_box(c, 101, 47, 3, 2);
+    canvas_draw_box(c, 109, 47, 3, 2);
+    if (chewing) {
+      canvas_draw_dot(c, x + 12, 45 + (p->frame % 3));
+      canvas_draw_dot(c, x + 14, 48);
+    }
   }
   if (p->mood == Play && !moving)
-    canvas_draw_circle(c, 85, 44 - (p->frame % 6), 3);
+    canvas_draw_circle(c, 86, 46 - (p->frame % 6), 3);
   furi_mutex_release(p->mutex);
 }
 static void screen_commit(uint8_t *data, size_t size,
@@ -142,8 +254,21 @@ static void command(PipCliStream *cli, FuriString *args, void *ctx) {
     printf("\r\n");
     return;
   }
-  if (strcmp(s, "feed") == 0)
-    action(p, Eat);
+  if (strncmp(s, "rate ", 5) == 0) {
+    uint32_t rate = strtoul(s + 5, NULL, 10);
+    if (rate >= 300 && rate <= 2000) {
+      p->tick_rate = rate;
+      p->frame = (uint64_t)furi_get_tick() * 10 / p->tick_rate;
+      p->until = p->frame;
+      p->commit_until = 0;
+      p->mood = Idle;
+    }
+  }
+  if (strcmp(s, "feed") == 0 || strcmp(s, "feedlocal") == 0) {
+    p->local_food = strcmp(s, "feedlocal") == 0;
+    action(p, PushNotice);
+  } else if (strcmp(s, "commit") == 0)
+    action(p, CommitNotice);
   else if (strcmp(s, "pet") == 0)
     action(p, Pet);
   else if (strcmp(s, "sleep") == 0)
@@ -153,10 +278,13 @@ static void command(PipCliStream *cli, FuriString *args, void *ctx) {
     p->target = 64;
   }
   uint32_t meals = p->meals, bond = p->bond;
+  uint32_t frame = p->frame, until = p->until;
   Mood mood = p->mood;
   furi_mutex_release(p->mutex);
   printf("PIP meals=%lu bond=%lu mood=%u\r\n", (unsigned long)meals,
          (unsigned long)bond, (unsigned)mood);
+  printf("PIP_CLOCK frame=%lu until=%lu tick=%lu\r\n", (unsigned long)frame,
+         (unsigned long)until, (unsigned long)furi_get_tick());
 }
 static void persist(Pip *p, bool load) {
   Storage *s = furi_record_open(RECORD_STORAGE);
@@ -181,6 +309,8 @@ static void persist(Pip *p, bool load) {
 int32_t gitgotchi_app(void *arg) {
   UNUSED(arg);
   Pip *p = calloc(1, sizeof(Pip));
+  p->tick_rate = furi_ms_to_ticks(1000);
+  p->frame = (uint64_t)furi_get_tick() * 10 / p->tick_rate;
   p->x = 64;
   p->target = 64;
   p->rng = furi_get_tick();
@@ -198,7 +328,8 @@ int32_t gitgotchi_app(void *arg) {
   bool running = true;
   while (running) {
     InputEvent event;
-    FuriStatus status = furi_message_queue_get(p->inputs, &event, 100);
+    FuriStatus status =
+        furi_message_queue_get(p->inputs, &event, p->tick_rate / 10);
     furi_mutex_acquire(p->mutex, FuriWaitForever);
     if (status == FuriStatusOk && event.type == InputTypeShort) {
       switch (event.key) {
@@ -226,9 +357,15 @@ int32_t gitgotchi_app(void *arg) {
         break;
       }
     }
-    p->frame++;
-    if (p->mood != Sleep && p->frame > p->until)
-      p->mood = Idle;
+    p->frame = (uint64_t)furi_get_tick() * 10 / p->tick_rate;
+    if (p->mood != Sleep && p->frame > p->until) {
+      if (p->mood == PushNotice)
+        action(p, Eat);
+      else if (p->mood == Eat)
+        action(p, Celebrate);
+      else
+        p->mood = Idle;
+    }
     if (p->x < p->target) {
       p->x += 2;
       if (p->x > p->target)
