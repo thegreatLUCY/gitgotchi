@@ -1,4 +1,5 @@
 import importlib.util, pathlib, subprocess, tempfile, unittest
+from unittest.mock import patch
 spec=importlib.util.spec_from_file_location('companion',pathlib.Path(__file__).parents[1]/'companion/app.py')
 module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
 class WatcherTests(unittest.TestCase):
@@ -15,10 +16,12 @@ class WatcherTests(unittest.TestCase):
         self.commit('second');self.assertEqual(self.w.poll()['kind'],'feed')
         restarted=module.Watcher(self.repo,self.root/'state.json',self.events.append, feed_on="commit")
         self.assertIsNone(restarted.poll());self.assertEqual(self.events,['commit','feed'])
-    def test_daily_cap_and_backward_reset(self):
+    def test_daily_goal_is_not_a_food_cap_and_backward_reset(self):
         self.w.poll();first=self.git('rev-parse','HEAD')
         for i in range(5):self.commit(str(i));self.w.poll()
-        self.assertEqual(self.events.count('feed'),3)
+        self.assertEqual(self.events.count('feed'),5)
+        self.assertTrue(self.w.snapshot()['goal_reached'])
+        self.assertEqual(self.w.snapshot()['meals'],5)
         self.git('reset','--hard',first);self.assertIsNone(self.w.poll())
     def test_empty_commit_does_not_feed(self):
         self.w.poll();self.git('commit','--allow-empty','-qm','empty');self.assertIsNone(self.w.poll())
@@ -44,4 +47,26 @@ class WatcherTests(unittest.TestCase):
         self.assertIsNone(self.w.poll())
         self.assertTrue(self.w.snapshot()['pending_push'])
         self.assertEqual(self.events,['commit'])
+    def test_new_day_resets_grid_but_not_reward_deduplication(self):
+        self.w.poll();self.commit('meal');self.w.poll()
+        self.assertEqual(self.w.snapshot()['meals'],1)
+        with patch.object(module,'local_day',return_value='2099-01-01'):
+            self.w.poll()
+            self.assertEqual(self.w.snapshot()['meals'],0)
+            self.assertFalse(self.w.snapshot()['goal_reached'])
+            self.commit('new day meal');self.w.poll()
+            self.assertEqual(self.w.snapshot()['meals'],1)
+    def test_goal_is_adjustable_without_changing_food(self):
+        self.w=module.Watcher(self.repo,self.root/'state.json',self.events.append,feed_on='commit',daily_goal=1)
+        self.w.poll();self.commit('one');self.w.poll()
+        self.assertTrue(self.w.snapshot()['goal_reached'])
+        self.assertEqual(self.w.snapshot()['daily_goal'],1)
+        self.commit('two');self.w.poll()
+        self.assertEqual(self.w.snapshot()['meals'],2)
+    def test_revisiting_rewarded_head_does_not_feed_again(self):
+        self.w.poll();first=self.git('rev-parse','HEAD')
+        self.commit('reward');reward=self.git('rev-parse','HEAD');self.w.poll()
+        self.git('reset','--hard',first);self.w.poll()
+        self.git('reset','--hard',reward);self.w.poll()
+        self.assertEqual(self.events.count('feed'),1)
 if __name__=='__main__':unittest.main()

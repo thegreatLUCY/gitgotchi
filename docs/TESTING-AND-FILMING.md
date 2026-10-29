@@ -24,7 +24,7 @@ On startup, the companion samples the device tick counter and calibrates animati
 
 Find your port using `python -m serial.tools.list_ports`. Add `--port 8766` if another preview occupies port 8765. Open the localhost URL the companion prints.
 
-The default is **push-based feeding**. Use `--feed-on commit` for a local-only project that should feed immediately after a commit. Local-only mode displays **COMMIT REWARDED** instead of claiming a push happened.
+Feeding uses one simple cycle: **commit + push = one meal and one grid square**. Playing and petting give no food or grid credit. Hold **Right** on Flipper to open today’s grid; Back returns to Pip. The browser shows the same daily progress.
 
 ## Do one real end-to-end test
 
@@ -62,7 +62,7 @@ The companion reports `USB confirmed: commit` and `USB confirmed: feed`. The fee
 
 "Push confirmed" means the local branch's configured upstream tracking ref contains the pending commit. A normal successful `git push` updates that ref. A failed push should not feed Pip. An external fetch can also establish upstream presence; this is not a network receipt checker or CI status check.
 
-Git rewards are capped at **three per local day per repository**. Extra commits can still show the commit notice, but will not produce more Git snacks that day. Unpushed pending progress survives a companion restart. Old history, empty commits, and backward/divergent movement do not earn food. Multiple commits between polls may collapse into one reward.
+The default daily goal is **three completed cycles per local day per repository**, adjustable with `--daily-goal 1` through `--daily-goal 12`. It is a minimum, not a cap: extra cycles still feed Pip. Reaching the goal triggers a special celebration. The grid resets when the running companion observes a new local date. Unpushed pending progress survives a companion restart. Old history, empty commits, and backward/divergent movement do not earn food. Multiple commits between polls may collapse into one reward.
 
 ## Film it with your phone
 
@@ -90,7 +90,7 @@ python tools/capture_flipper.py --serial /dev/cu.usbmodemYOUR_FLIPPER --action c
 python tools/capture_flipper.py --serial /dev/cu.usbmodemYOUR_FLIPPER --action feed --wait 2 --output delivery.png
 ```
 
-These are explicit simulated CLI events, not proof that a commit or push happened. `feed` increases the physical pet's lifetime meal count and bypasses the companion's daily cap.
+These are explicit simulated CLI events, not proof that a commit or push happened. `feed` increases the physical pet's lifetime meal count and does not add grid credit.
 
 ## Regression checks
 

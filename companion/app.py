@@ -3,12 +3,16 @@
 import argparse, datetime, json, pathlib, re, subprocess, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+def local_day():
+    return datetime.date.today().isoformat()
+
 class Watcher:
-    def __init__(self, repo, state_path, emit=lambda event: None, feed_on="push"):
+    def __init__(self, repo, state_path, emit=lambda event: None, feed_on="push", daily_goal=3):
         self.repo = str(pathlib.Path(repo).resolve())
         self.path = pathlib.Path(state_path)
         self.emit = emit
         self.feed_on = feed_on
+        self.daily_goal = daily_goal
         self.lock = threading.Lock()
         try:
             self.data = json.loads(self.path.read_text())
@@ -31,7 +35,7 @@ class Watcher:
         with self.lock:
             entry = self.data['repos'].setdefault(self.repo, {})
             previous = entry.get('head')
-            day = datetime.date.today().isoformat()
+            day = local_day()
             if entry.get('day') != day:
                 entry.update(day=day, meals=0)
             if previous and previous != head:
@@ -53,8 +57,10 @@ class Watcher:
                 except subprocess.CalledProcessError:
                     ready = False
             if pending and ready:
-                if entry['meals'] < 3:
+                rewarded = entry.setdefault('rewarded', [e['id'].removesuffix(':feed') for e in self.data['events'] if e['kind'] == 'feed'])
+                if pending not in rewarded:
                     entry['meals'] += 1
+                    rewarded.append(pending)
                     event = {'kind':'feed', 'time':time.time(), 'label':self.git('log','-1','--format=%s',pending)[:90], 'id':pending + ':feed'}
                     self.data['events'] = (self.data['events'] + [event])[-30:]
                     notifications.append('feed')
@@ -73,16 +79,18 @@ class Watcher:
 
     def snapshot(self):
         with self.lock:
-            return {'repo':pathlib.Path(self.repo).name, 'events':list(self.data['events']), 'feed_on':self.feed_on, 'pending_push':bool(self.data['repos'].get(self.repo,{}).get('pending')), 'meals':self.data['repos'].get(self.repo,{}).get('meals',0)}
+            return {'repo':pathlib.Path(self.repo).name, 'events':list(self.data['events']), 'feed_on':self.feed_on, 'pending_push':bool(self.data['repos'].get(self.repo,{}).get('pending')), 'meals':self.data['repos'].get(self.repo,{}).get('meals',0), 'day':self.data['repos'].get(self.repo,{}).get('day',local_day()), 'daily_goal':self.daily_goal, 'goal_reached':self.data['repos'].get(self.repo,{}).get('meals',0)>=self.daily_goal}
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--repo', default='.')
-    parser.add_argument('--feed-on', choices=['push', 'commit'], default='push', help='Reward after upstream confirmation (default) or immediately after commit')
+    parser.add_argument('--daily-goal', type=int, default=3, help='Daily commit-and-push goal (1–12, default 3)')
     parser.add_argument('--port', type=int, default=8765)
     parser.add_argument('--serial', help='Flipper serial port; close qFlipper first')
     parser.add_argument('--state', default=str(pathlib.Path(__file__).with_name('state.json')))
     args = parser.parse_args()
+    if not 1 <= args.daily_goal <= 12:
+        parser.error('--daily-goal must be between 1 and 12')
     device = None
     if args.serial:
         import serial
@@ -104,7 +112,9 @@ def main():
     def emit(event):
         if device:
             try:
-                command = 'feedlocal' if event == 'feed' and args.feed_on == 'commit' else event
+                if event == 'feed':
+                    sync_progress()
+                command = event
                 response = exchange(command)
                 match = re.search(rb'PIP meals=(\d+) bond=(\d+) mood=(\d+)', response)
                 if match:
@@ -133,12 +143,22 @@ def main():
         except Exception as error:
             print('Clock calibration skipped:',error,flush=True)
     emit('status')
-    watcher = Watcher(args.repo, args.state, emit, feed_on=args.feed_on)
+    watcher = Watcher(args.repo, args.state, emit, daily_goal=args.daily_goal)
+    last_progress = None
+    def sync_progress():
+        nonlocal last_progress
+        state=watcher.snapshot()
+        progress=(state['day'].replace('-',''), state['meals'], state['daily_goal'])
+        if device and progress != last_progress:
+            response=exchange('progress %s %s %s' % progress)
+            if b'PIP_PROGRESS' in response:
+                last_progress=progress
     watcher.git('rev-parse', '--show-toplevel')
     def watch():
         while True:
             try:
                 watcher.poll()
+                sync_progress()
             except (subprocess.CalledProcessError, OSError) as error:
                 print('Waiting for a readable commit:', error, flush=True)
             time.sleep(2)

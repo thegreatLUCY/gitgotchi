@@ -22,13 +22,19 @@ The companion also includes a separate, interactive Mac/browser prototype:
 
 The browser pet and Flipper pet have separate saves. When USB is connected, a second panel streams the **actual Flipper screen** above the interactive preview. That panel is a live mirror; the interactive preview below it is a separate pet.
 
+## Daily commit-and-push grid
+
+![Daily commit-and-push goal on Flipper](docs/screenshots/daily-grid.png)
+
+Hold **Right** on Flipper to open the grid. Each completed cycle fills a square and feeds Pip. The default goal is **3 per day**; use `--daily-goal 5` for a different minimum. Extra cycles still earn food. **Playing never fills a square or feeds Pip.**
+
 ## What works today
 
 - Native 128 × 64 Flipper habitat with procedural pixel artwork.
 - Breathing, blinking, wandering, petting hearts, eating, sleeping, and simple play animations.
 - Physical button interactions, including waking Pip by moving left or right.
 - Affection and lifetime meal totals saved to the Flipper SD card on normal app exit.
-- Local Git polling with one snack per eligible observed change and a three-meal daily cap per repository.
+- Local Git polling with one snack per eligible observed change and an adjustable daily goal per repository.
 - Automatic device animation-clock calibration on companion startup.
 - USB CLI delivery with an acknowledgement containing the device's meal, affection, and mood values.
 - A localhost browser preview with demo controls, optional sound, activity history, and local persistence.
@@ -46,7 +52,7 @@ cd gitgotchi
 python3 companion/app.py --repo .
 ```
 
-Open **http://127.0.0.1:8765**. The initial Git history establishes a baseline. Make a new file-changing commit after the watcher starts, then push it to your configured upstream to trigger a snack. Use `--feed-on commit` for immediate local-only feeding.
+Open **http://127.0.0.1:8765**. The initial Git history establishes a baseline. Make a new file-changing commit after the watcher starts, then push it to your configured upstream to trigger a snack.
 
 To watch a different project:
 
@@ -63,7 +69,6 @@ For an offline animation-only preview, open [`companion/index.html`](companion/i
 | Control | Action |
 | --- | --- |
 | Pet Pip / Space | Affection and a little heart |
-| Try a commit snack | Preview an eating interaction; does not earn a Git reward |
 | Up / Take a nap | Walk to bed and sleep |
 | Down / Play together | Play with the ball |
 | Left / Right | Wander across the room and wake up |
@@ -96,7 +101,8 @@ These are application files, not firmware updates. Match your installed firmware
 | Up | Walk to bed and sleep |
 | Down | Play |
 | Left / Right | Walk and wake up |
-| Back | Save affection/meals and exit |
+| Hold Right | Open today’s commit-and-push grid |
+| Back | Close the grid, or save and exit |
 
 Save by exiting normally before powering off. Abrupt power loss can lose activity since the last app exit.
 
@@ -136,17 +142,19 @@ The watcher polls HEAD every two seconds:
 
 1. First observation establishes a baseline; existing history earns no food.
 2. A descendant HEAD with a net file change produces **COMMIT DETECTED** and a persistent pending reward.
-3. In the default `--feed-on push` mode, the companion waits until the current branch's configured upstream tracking ref contains that pending commit.
-4. It sends one snack, capped at three rewards per repository per local calendar day.
+3. The companion waits until the current branch's configured upstream tracking ref contains that pending commit.
+4. It sends one snack and fills one square for that completed commit-and-push cycle.
 5. It clears the pending reward so the same push cannot feed twice, including after a restart.
 
 A successful ordinary `git push` normally updates the local upstream tracking ref. This is a local observation, not a remote API receipt check: an external fetch can also establish upstream presence. With no upstream configured, push mode waits. A failed push does not update that ref and should not feed Pip.
 
-`--feed-on commit` rewards immediately and shows **COMMIT REWARDED** rather than claiming a push happened. This works offline without a remote.
+The workflow is always **commit + push = one meal + one square**. Several commits in one observed batch count as one cycle; the grid measures completed cycles, not individual commits in a batch.
 
-Several commits between polls count as one pending reward. Empty commits, backward resets, and divergent history movement do not earn food. A checkout to a descendant commit can count. This is an activity heuristic, not a code quality measure or anti-cheat system. Commit notices still appear after the daily food cap is reached.
+Several commits between polls count as one pending reward. Empty commits, backward resets, and divergent history movement do not earn food. A checkout to a descendant commit can count. This is an activity heuristic, not a code quality measure or anti-cheat system.
 
-The cap belongs to the companion. Manually sending `feed` or `feedlocal` bypasses it. The Flipper stores a separate lifetime meal total. Pip has no hunger decay and cannot die in this prototype.
+The daily minimum is **three cycles**, adjustable with `--daily-goal 1` through `--daily-goal 12`. This is a goal, not a food cap: extra cycles still feed Pip. Reaching the goal produces a special celebration. The browser grid resets at local midnight while the companion is running. The device mirrors the last synchronized date/count, so reconnect the companion to refresh it after a day offline.
+
+Playing and petting never add food or grid credit. The preview has no manual snack button. Developer CLI feed commands remain for diagnostics; they do not add daily Git credit and are not the normal feeding flow. Pip has no hunger decay and cannot die in this prototype.
 
 | Commit noticed | Push confirmed | Snack delivery |
 | --- | --- | --- |
@@ -177,8 +185,8 @@ The companion reads Git metadata and net file changes; it never commits, pushes,
 
 - Watcher: `companion/state.json` by default, containing repository paths, HEAD baselines, daily reward counts, and up to 30 event labels/commit IDs. This file is ignored by Git.
 - Browser: `localStorage`, under `pip-v1`, containing affection, demo meal count, and position.
-- Flipper: `/ext/apps_data/gitgotchi/pip.dat`, containing a format marker, affection, and lifetime meal count.
-- CLI: `gitgotchi status`, `commit`, `feed`, `feedlocal`, `pet`, `sleep`, `wake`, and `screenshot`, available while the app is open.
+- Flipper: `/ext/apps_data/gitgotchi/pip.dat` saves affection and lifetime meals; `progress.dat` separately saves the last synchronized date, daily count, and goal. Both save on normal exit.
+- CLI: `gitgotchi status`, `commit`, `feed`, `feedlocal`, `pet`, `sleep`, `wake`, `grid`, `progress YYYYMMDD COUNT GOAL`, and `screenshot`, available while the app is open.
 - Status response: `PIP meals=1 bond=2 mood=0`.
 - Mood values: idle `0`, walk `1`, pet `2`, eat `3`, sleep `4`, play `5`, commit notice `6`, push notice `7`, and celebration `8`.
 
@@ -229,7 +237,7 @@ python3 -m unittest discover -s tests -v
 python3 -m py_compile companion/app.py tools/capture_flipper.py
 ```
 
-The watcher tests cover first-run baselines, repeated polling, restart deduplication, the daily cap, backward resets, empty commits, pending-reward restart persistence, waiting for upstream confirmation, and deduplication after a real local push. The GitHub Actions workflow runs those tests and checks the inline JavaScript syntax.
+The watcher tests cover first-run baselines, repeated polling, restart deduplication, daily goals and midnight reset, backward resets, empty commits, pending-reward restart persistence, waiting for upstream confirmation, and deduplication after a real local push. The GitHub Actions workflow runs those tests and checks the inline JavaScript syntax.
 
 Verified during development:
 
@@ -247,7 +255,7 @@ Verified during development:
 | USB port busy | Close qFlipper, serial terminals, and other companion instances. |
 | No USB acknowledgement | Open Gitgotchi first, confirm the serial port, then restart the companion. |
 | API mismatch | Choose the matching build or compile against your firmware SDK. |
-| No food after a commit | Check the baseline, daily cap, net file difference, and watched repository path. |
+| No food after a commit | Check the baseline, successful push/upstream, net file difference, and watched repository path. |
 | Companion says repository is unreadable | Confirm `git -C /your/project rev-parse HEAD` succeeds. |
 | Browser demo works but Flipper does nothing | Preview controls act locally; use a real eligible Git commit for the USB path. |
 | Device save is missing | Confirm the SD card is mounted and exit with Back before powering off. |

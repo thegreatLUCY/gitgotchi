@@ -37,6 +37,8 @@ typedef struct {
   uint32_t frame, until, bond, meals, rng, commit_until, tick_rate;
   Mood mood;
   bool local_food;
+  bool grid_open, goal_party;
+  uint32_t goal_day, daily_done, daily_goal;
   uint8_t screen[1024];
 } Pip;
 typedef struct {
@@ -53,6 +55,7 @@ static void heart(Canvas *c, int x, int y) {
   canvas_draw_dot(c, x + 2, y + 4);
 }
 static void action(Pip *p, Mood m) {
+  if(m==CommitNotice || m==PushNotice)p->grid_open=false;
   p->mood = m;
   p->until = p->frame + (m == Sleep ? 36000 : m == Eat ? 100 : 50);
   if (m == Eat) {
@@ -84,6 +87,28 @@ static void draw(Canvas *c, void *ctx) {
   furi_mutex_acquire(p->mutex, FuriWaitForever);
   canvas_clear(c);
   canvas_set_font(c, FontSecondary);
+  if (p->grid_open) {
+    char label[32];
+    canvas_draw_str(c, 3, 9, "COMMIT + PUSH / TODAY");
+    snprintf(label, sizeof(label), "%lu / %lu completed",
+             (unsigned long)p->daily_done, (unsigned long)p->daily_goal);
+    canvas_draw_str(c, 3, 22, label);
+    uint32_t cells =
+        p->daily_done > p->daily_goal ? p->daily_done : p->daily_goal;
+    if (cells > 24)
+      cells = 24;
+    for (uint32_t i = 0; i < cells; i++) {
+      int x = 4 + (i % 12) * 10, y = 29 + (i / 12) * 10;
+      canvas_draw_rframe(c, x, y, 8, 8, 1);
+      if (i < p->daily_done)
+        canvas_draw_box(c, x + 2, y + 2, 4, 4);
+    }
+    canvas_draw_str(c, 3, 61,
+                    p->daily_done >= p->daily_goal ? "GOAL DONE!  Back: pet"
+                                                   : "One cycle = one meal");
+    furi_mutex_release(p->mutex);
+    return;
+  }
   const char *banner = NULL;
   if (p->mood == CommitNotice ||
       (p->mood == PushNotice && p->frame < p->commit_until))
@@ -93,7 +118,7 @@ static void draw(Canvas *c, void *ctx) {
   else if (p->mood == Eat)
     banner = "SNACK DELIVERY!";
   else if (p->mood == Celebrate)
-    banner = "THANK YOU!";
+    banner = p->goal_party ? "DAILY GOAL DONE!" : "THANK YOU!";
   if (banner) {
     canvas_draw_box(c, 0, 0, 128, 12);
     canvas_set_color(c, ColorWhite);
@@ -101,8 +126,15 @@ static void draw(Canvas *c, void *ctx) {
     canvas_set_color(c, ColorBlack);
   } else {
     canvas_draw_str(c, 3, 9, "Pip");
-    if (p->bond)
-      heart(c, 118, 3);
+    char progress[24];
+    snprintf(progress, sizeof(progress), "%lu/%lu",
+             (unsigned long)p->daily_done, (unsigned long)p->daily_goal);
+    canvas_draw_str(c, 38, 9, progress);
+    for (uint32_t i = 0; i < p->daily_goal && i < 6; i++) {
+      canvas_draw_frame(c, 75 + i * 8, 3, 6, 6);
+      if (i < p->daily_done)
+        canvas_draw_box(c, 77 + i * 8, 5, 2, 2);
+    }
   }
   // Window frame, moon, sill and little curtains.
   canvas_draw_rframe(c, 89, 16, 29, 20, 2);
@@ -254,6 +286,19 @@ static void command(PipCliStream *cli, FuriString *args, void *ctx) {
     printf("\r\n");
     return;
   }
+  if (strncmp(s, "progress ", 9) == 0) {
+    unsigned long day, done, goal;
+    if (sscanf(s + 9, "%lu %lu %lu", &day, &done, &goal) == 3 && goal >= 1 &&
+        goal <= 12) {
+      p->goal_party =
+          done >= goal && (p->goal_day != day || p->daily_done < goal);
+      p->goal_day = day;
+      p->daily_done = done;
+      p->daily_goal = goal;
+    }
+  }
+  if (strcmp(s, "grid") == 0)
+    p->grid_open = !p->grid_open;
   if (strncmp(s, "rate ", 5) == 0) {
     uint32_t rate = strtoul(s + 5, NULL, 10);
     if (rate >= 300 && rate <= 2000) {
@@ -279,10 +324,13 @@ static void command(PipCliStream *cli, FuriString *args, void *ctx) {
   }
   uint32_t meals = p->meals, bond = p->bond;
   uint32_t frame = p->frame, until = p->until;
+  uint32_t day = p->goal_day, done = p->daily_done, goal = p->daily_goal;
   Mood mood = p->mood;
   furi_mutex_release(p->mutex);
   printf("PIP meals=%lu bond=%lu mood=%u\r\n", (unsigned long)meals,
          (unsigned long)bond, (unsigned)mood);
+  printf("PIP_PROGRESS day=%lu done=%lu goal=%lu\r\n", (unsigned long)day,
+         (unsigned long)done, (unsigned long)goal);
   printf("PIP_CLOCK frame=%lu until=%lu tick=%lu\r\n", (unsigned long)frame,
          (unsigned long)until, (unsigned long)furi_get_tick());
 }
@@ -303,6 +351,22 @@ static void persist(Pip *p, bool load) {
       storage_file_write(f, &state, sizeof(state));
     storage_file_close(f);
   }
+  uint32_t progress[3] = {p->goal_day, p->daily_done, p->daily_goal};
+  if (storage_file_open(f, EXT_PATH("apps_data/gitgotchi/progress.dat"),
+                        load ? FSAM_READ : FSAM_WRITE,
+                        load ? FSOM_OPEN_EXISTING : FSOM_CREATE_ALWAYS)) {
+    if (load) {
+      if (storage_file_read(f, progress, sizeof(progress)) ==
+              sizeof(progress) &&
+          progress[2] >= 1 && progress[2] <= 12) {
+        p->goal_day = progress[0];
+        p->daily_done = progress[1];
+        p->daily_goal = progress[2];
+      }
+    } else
+      storage_file_write(f, progress, sizeof(progress));
+    storage_file_close(f);
+  }
   storage_file_free(f);
   furi_record_close(RECORD_STORAGE);
 }
@@ -311,6 +375,7 @@ int32_t gitgotchi_app(void *arg) {
   Pip *p = calloc(1, sizeof(Pip));
   p->tick_rate = furi_ms_to_ticks(1000);
   p->frame = (uint64_t)furi_get_tick() * 10 / p->tick_rate;
+  p->daily_goal = 3;
   p->x = 64;
   p->target = 64;
   p->rng = furi_get_tick();
@@ -331,30 +396,38 @@ int32_t gitgotchi_app(void *arg) {
     FuriStatus status =
         furi_message_queue_get(p->inputs, &event, p->tick_rate / 10);
     furi_mutex_acquire(p->mutex, FuriWaitForever);
+    if (status == FuriStatusOk && event.type == InputTypeLong &&
+        event.key == InputKeyRight)
+      p->grid_open = !p->grid_open;
     if (status == FuriStatusOk && event.type == InputTypeShort) {
-      switch (event.key) {
-      case InputKeyBack:
-        running = false;
-        break;
-      case InputKeyOk:
-        action(p, Pet);
-        break;
-      case InputKeyUp:
-        action(p, Sleep);
-        break;
-      case InputKeyDown:
-        action(p, Play);
-        break;
-      case InputKeyLeft:
-        p->target = 30;
-        p->mood = Walk;
-        break;
-      case InputKeyRight:
-        p->target = 96;
-        p->mood = Walk;
-        break;
-      default:
-        break;
+      if (p->grid_open) {
+        if (event.key == InputKeyBack)
+          p->grid_open = false;
+      } else {
+        switch (event.key) {
+        case InputKeyBack:
+          running = false;
+          break;
+        case InputKeyOk:
+          action(p, Pet);
+          break;
+        case InputKeyUp:
+          action(p, Sleep);
+          break;
+        case InputKeyDown:
+          action(p, Play);
+          break;
+        case InputKeyLeft:
+          p->target = 30;
+          p->mood = Walk;
+          break;
+        case InputKeyRight:
+          p->target = 96;
+          p->mood = Walk;
+          break;
+        default:
+          break;
+        }
       }
     }
     p->frame = (uint64_t)furi_get_tick() * 10 / p->tick_rate;
